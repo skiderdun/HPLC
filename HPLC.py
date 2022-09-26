@@ -7,8 +7,7 @@ def create(path):
     try: 
         dirs = os.listdir(path)
     except Exception:
-        print("That path isn't real\nfrigin noob\n")
-        continue
+        return print("That path isn't real\nfrigin noob\n")
     else:
         for file in dirs:
             Data = pd.concat([Data, pd.read_excel(f"{path}/{file}")])
