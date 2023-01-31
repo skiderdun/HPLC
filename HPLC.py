@@ -27,21 +27,21 @@ def create(path):
         return "That path isn't real\nfrigin noob\n"
     else:
         values = {}
+        n = 0
 
         for file in dirs:
             
             tempfile = xlrd.open_workbook(f"{path}/{file}", logfile=open(os.devnull, 'w'))
             
-            temp = pd.read_excel(tempfile)
-            
-            columns = [x for x in list(set(temp['Unnamed: 0'].dropna())) if x != 'Name' if x != 'Sample_Name']
+            temp = pd.read_excel(tempfile, index_col = 0)
+                        
+            columns =  list(temp.drop(columns = 'Unnamed: 1').dropna().index[1:])
             index = [x for x in list(set(temp['Unnamed: 1'].dropna())) if x != 'Sample_Name'][0]
-            data = [float(x) for x in list(set(temp['Unnamed: 2'].dropna())) if x != 'Compound_Amount']
+            data = [temp.at[column,"Unnamed: 2"] for column in columns]
+            n += 1
             
-            if index in values:
-                index = index + ' rep'
-            
-            values[index] = dict(zip(columns,data))
+            values[index,n] = dict(zip(columns,data))
+           
         Data = pd.DataFrame(values).transpose()
         Data = Data.fillna(0.000)
 
