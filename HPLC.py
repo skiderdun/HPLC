@@ -75,12 +75,13 @@ def writeOut(name, df):
         df.to_excel(writer, sheet_name = "Data") 
     return 'Good to go!\n'
 
-def getOld(file, df):
+def getOld(path, df):
+    path = path.replace("\\",'/').replace('\'','').replace('\"','')
     df = df
-    if file[-5:] != ".xlsx":
-        file = file + '.xlsx'
+    if path[-5:] != ".xlsx":
+        path = path + '.xlsx'
     try:
-        df = pd.read_excel(file, index_col = [0,1], dtype = object)
+        df = pd.read_excel(path, index_col = [0,1], dtype = object)
     except Exception:
         return "Check your spelling on that path"
         
