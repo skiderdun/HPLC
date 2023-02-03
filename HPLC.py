@@ -8,7 +8,9 @@ import sys
 import xlrd
 
 def log(reg):
-    if type(reg) == pd.core.frame.DataFrame:
+    if "table.txt" not in os.listdir():
+        open("table.txt", "w").close()
+    elif type(reg) == pd.core.frame.DataFrame:
         df = reg
         try:
             df.to_csv('table.txt')
