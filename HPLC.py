@@ -15,7 +15,8 @@ class HPLC:
         master.title("HPLC")
 
         self.data = {}
-        self.path = None
+        self.path = os.getcwd()
+        self.path_key = self.path[self.path.rfind('/') + 1:self.path.rfind('.')]
         self.names = []
         self.grid_frame = None
 
@@ -38,8 +39,7 @@ class HPLC:
     def process(self):
         # get the path to the directory containing the data files
         self.path = tkinter.filedialog.askdirectory()
-        if self.path == '':
-            self.path = os.getcwd()
+        self.path_key = self.path[self.path.rfind('/') + 1:self.path.rfind('.')]
         if os.path.isdir(self.path):
             names = tkinter.simpledialog.askstring('Index Column Names', 'Enter the Index Column Names (comma-separated):')
             self.names = [x.strip() for x in names.split(',')] + ['#']
@@ -48,8 +48,6 @@ class HPLC:
     def import_file(self):
         # get the path to the file containing the data
         self.path = tkinter.filedialog.askopenfilename()
-        if self.path == '':
-            self.path = os.getcwd()
         if os.path.isfile(self.path):
             file_extension = os.path.splitext(self.path)[1].lower()
             ind_cols = tkinter.simpledialog.askinteger('Index', 'Number of Index Levels?:')
@@ -119,15 +117,30 @@ class HPLC:
 
         Data = Data.astype(float)
 
-        self.data[self.path[self.path.rfind('/') + 1:self.path.rfind('.')]] = Data
+        self.data[self.path_key] = Data
         print(Data)
         self.create_grid(Data)
     
     def save_as(self):
         def save_data():
+            self.path = tkinter.filedialog.asksaveasfilename(initialdir=self.path[:self.path.rfind('/')],
+                                                    title='Save File',
+                                                    filetypes=(('Excel Files', '*.xlsx'), ('OpenDocument', '*.ods'), ('All Files', '*.*')))
+            # if no file extension is given, add .xlsx
+            if self.path.find('.') == -1:
+                self.path = self.path + '.xlsx'
+            self.path_key = self.path[:self.path.rfind('.')]
+            file_extension = os.path.splitext(self.path)[1].lower()
             for key in self.checks.keys():
                 if self.checks[key].get() == 1:
-                    self.save(self.data[key])
+                            if file_extension == '.xlsx' or file_extension == '.xls':
+                                with pd.ExcelWriter(self.path_key + '_' + str(key) + '.xlsx') as writer:
+                                    self.data[key].to_excel(writer, sheet_name=str(key))
+                            elif file_extension == '.ods':
+                                self.data[key].to_excel(self.path_key + '_' + str(key) + '.ods')
+                            else:
+                                self.data[key].to_csv(self.path_key + '_' + str(key) + '.csv')
+                            
             self.save_dialog.destroy()
         
         # new window to select which data frames to save
@@ -136,7 +149,7 @@ class HPLC:
 
         # create a button to save the selected data frames
         self.save_button = tkinter.Button(self.save_dialog, text="Save", command=save_data)
-        self.save_button.pack(side=tkinter.TOP)
+        self.save_button.pack(side=tkinter.BOTTOM)
 
         # each entry in self.data has a check button and is labeled with the name of the data frame
         self.checks = {}
@@ -212,23 +225,6 @@ class HPLC:
         canvas.config(xscrollcommand=hbar.set)
         canvas.config(scrollregion=canvas.bbox("all"))
 
-    def save(self, data=None):
-        # save the changes made to the grid
-        self.path = tkinter.filedialog.asksaveasfilename(initialdir=self.path[:self.path.rfind('/')],
-                                                         title='Save File',
-                                                         filetypes=(('Excel Files', '*.xlsx'), ('All Files', '*.*')))
-        if self.path:
-            if self.path[-5:] == '.xlsx':
-                writer = pd.ExcelWriter(self.path)
-                data.to_excel(writer, sheet_name=self.path[self.path.rfind('/') + 1:self.path.rfind('.')] + str(key))
-                writer.save()
-            elif self.path[-4:] == '.csv':
-                data.to_csv(self.path)
-            else:
-                self.path = self.path + '.xlsx'
-                writer = pd.ExcelWriter(self.path)
-                data.to_excel(writer, sheet_name=self.path[self.path.rfind('/') + 1:self.path.rfind('.')] + str(key))
-                writer.save()
 
 
 def main():
