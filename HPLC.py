@@ -1,142 +1,239 @@
-import warnings
-warnings.simplefilter(action='ignore', category=FutureWarning)
 
-import pandas as pd
-import numpy as np
-import os
-import sys
+
+import tkinter
+from tkinter import filedialog
 import xlrd
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+import os
 
-def log(reg):
-    if "table.txt" not in os.listdir():
-        open("table.txt", "w").close()
-    elif type(reg) == pd.core.frame.DataFrame:
-        df = reg
-        try:
-            df.to_csv('table.txt')
-        except Exception:
-            df = pd.DataFrame.to_csv('table.txt')
-    else:
-        with open('log.txt', 'a') as file:
-            print(reg, file)
-    return pd.read_csv('table.txt', index_col = [0,1])
+class HPLC:
+    def __init__(self, master):
+        self.master = master
+        master.title("HPLC")
 
-def create(path):
-    path = path.replace("\\",'/').replace('\'','').replace('\"','')
-    try: 
+        self.data = {}
+        self.path = None
+        self.names = []
+        self.grid_frame = None
+
+        # create a window to host buttons
+        self.button_frame = tkinter.Frame(self.master)
+        self.button_frame.pack()
+
+        # create a button to import data from a file
+        self.import_file = tkinter.Button(self.button_frame, text="Import File", command=self.import_file)
+        self.import_file.pack(side=tkinter.LEFT)
+
+        # save as button
+        self.save_as = tkinter.Button(self.button_frame, text="Save As", command=self.save_as)
+        self.save_as.pack(side=tkinter.LEFT)
+
+        # create a button to process data
+        self.process = tkinter.Button(self.button_frame, text="Process", command=self.process)
+        self.process.pack(side=tkinter.LEFT)
+
+    def process(self):
+        # get the path to the directory containing the data files
+        self.path = tkinter.filedialog.askdirectory()
+        if self.path == '':
+            self.path = os.getcwd()
+        if os.path.isdir(self.path):
+            names = tkinter.simpledialog.askstring('Index Column Names', 'Enter the Index Column Names (comma-separated):')
+            self.names = [x.strip() for x in names.split(',')] + ['#']
+            self.from_hplc_files(path=self.path, names=self.names)
+
+    def import_file(self):
+        # get the path to the file containing the data
+        self.path = tkinter.filedialog.askopenfilename()
+        if self.path == '':
+            self.path = os.getcwd()
+        if os.path.isfile(self.path):
+            file_extension = os.path.splitext(self.path)[1].lower()
+            ind_cols = tkinter.simpledialog.askinteger('Index', 'Number of Index Levels?:')
+            if file_extension == '.csv':
+                self.new_csv(path=self.path, ind_cols=int(ind_cols))
+            elif file_extension == '.xlsx' or file_extension == '.xls':
+                self.new_excel(path=self.path, ind_cols=int(ind_cols))
+
+    def new_csv(self, path, ind_cols):
+        # import the csv file into a dataframe
+        Data = pd.read_csv(path, index_col=list(np.arange(0,ind_cols)))
+        Data = Data.astype(float)
+        self.data[self.path[self.path.rfind('/') + 1:self.path.rfind('.')]] = Data
+        self.create_grid(Data)
+    
+    def new_excel(self, path, ind_cols):
+        # import the excel file into a dataframe
+        Data = pd.read_excel(path, index_col=list(np.arange(0,ind_cols)))
+        Data = Data.astype(float)
+        self.data[self.path[self.path.rfind('/') + 1:self.path.rfind('.')]] = Data
+        print(Data)
+        self.create_grid(Data)
+
+    def from_hplc_files(self, path, names):
         dirs = os.listdir(path)
-    except Exception:
-        return "That path isn't real\nfrigin noob\n"
-    else:
+        # import all files in the directory into a single dataframe     
+
         values = {}
         n = 0
-
         for file in dirs:
+                
+            with xlrd.open_workbook(os.path.join(path, file), logfile=open(os.devnull, 'w')) as tempfile:
             
-            tempfile = xlrd.open_workbook(f"{path}/{file}", logfile=open(os.devnull, 'w'))
-            
-            temp = pd.read_excel(tempfile, index_col = 0)
-                        
+                temp = pd.read_excel(tempfile, index_col=0)
+
             columns =  list(temp.drop(columns = 'Unnamed: 1').dropna().index[1:])
-            index = [x for x in list(set(temp['Unnamed: 1'].dropna())) if x != 'Sample_Name'][0]
-            data = [temp.at[column,"Unnamed: 2"] for column in columns]
+            index = [x.split(' ') + [n] for x in list(set(temp['Unnamed: 1'].dropna())) if x != 'Sample_Name'][0]
+
             n += 1
             
-            values[index,n] = dict(zip(columns,data))
-           
+            data = [float(temp.at[column,"Unnamed: 2"]) for column in columns]       
+            
+            index = tuple(index)
+
+            values[index] = dict(zip(columns,data))
+
         Data = pd.DataFrame(values).transpose()
+            
         Data = Data.fillna(0.000)
 
-     
-    return Data
+        if names[-1] != '#':
+            names = names + ['#']
 
-def ind_col(frame):
-    new_cols = list(set([x[0] for x in frame.index.to_list()]))
+        Data.index.names = names
 
-    ind_len = int(0)
-    for col in new_cols:
-        length = frame.loc[col].size
-        if length > ind_len:
-            ind_len = int(length) 
+        Data.index = Data.index.map(lambda x: tuple([int(y) if isinstance(y, str) and y.isdigit() else y for y in x])
+                                    if not isinstance(x, float) and not isinstance(x, int) else x)
 
-    new_ind = pd.MultiIndex.from_tuples([tuple(y.split()) for y in list([x[1] for x in frame.index.to_list()])[0:ind_len]])
+        Data.sort_index(inplace=True)
 
-    tempframe = pd.DataFrame(columns = new_cols,index = new_ind)
+              
+        new_index = []
+        for x in np.arange(Data.index.size):
+            new_index.append(Data.index[x][0:-1] + (x,))
+        new_index = pd.MultiIndex.from_tuples(new_index, names=Data.index.names)
+        Data.index = new_index
 
+        Data = Data.astype(float)
 
-    for col in new_cols:
-        for i in enumerate(frame.loc[col].values.astype(float).tolist()):
-            tempframe[col].iloc[i[0]] = i[1][0]
-
-    return tempframe
-
-def writeOut(name, df):
-    if name[-5:] != ".xlsx":
-        name = name + '.xlsx'
-    with pd.ExcelWriter(name) as writer:
-        df.to_excel(writer, sheet_name = "Data") 
-    return 'Good to go!\n'
-
-def getOld(path, df):
-    path = path.replace("\\",'/').replace('\'','').replace('\"','')
-    df = df
-    if path[-5:] != ".xlsx":
-        path = path + '.xlsx'
-    try:
-        df = pd.read_excel(path, index_col = [0,1], dtype = object)
-    except Exception:
-        return "Check your spelling on that path"
+        self.data[self.path[self.path.rfind('/') + 1:self.path.rfind('.')]] = Data
+        print(Data)
+        self.create_grid(Data)
+    
+    def save_as(self):
+        def save_data():
+            for key in self.checks.keys():
+                if self.checks[key].get() == 1:
+                    self.save(self.data[key])
+            self.save_dialog.destroy()
         
-    else:
-        return df
+        # new window to select which data frames to save
+        self.save_dialog = tkinter.Toplevel(self.master, takefocus=True, padx=10, pady=10)
+        self.save_dialog.title('Save As')
 
-def SwitchKey(inp, df):
-    df = df
-    switch={
-            'new' : lambda x : create(x),
-            'format' : lambda : ind_col(df),
-            'write' : lambda x : writeOut(x, df),
-            'old' : lambda x : getOld(x, df),
-            'test' : lambda x : x,
-            'quit' : lambda : sys.exit()
-            }
-    return switch.get(inp)
+        # create a button to save the selected data frames
+        self.save_button = tkinter.Button(self.save_dialog, text="Save", command=save_data)
+        self.save_button.pack(side=tkinter.TOP)
 
-def Parse():
-    inp = input('\n--> ').split()
-    reg = () 
-    df = log(reg)
-    while True:
-        try:
-            SwitchKey(inp[0], df)(inp[1:])
-        except:
-            return "WAT!?"
+        # each entry in self.data has a check button and is labeled with the name of the data frame
+        self.checks = {}
+        for key in self.data.keys():
+            self.checks[key] = tkinter.IntVar()
+            tkinter.Checkbutton(self.save_dialog, text=key, variable=self.checks[key]).pack(side=tkinter.TOP)
+
+    def create_grid(self, data=None):
+        #  display the data in a excel like grid in a new TopLevel window
+        self.grid = tkinter.Toplevel(self.master, takefocus=True, padx=10, pady=10)
+        self.grid.title(self.path[self.path.rfind('/') + 1:self.path.rfind('.')])
+
+        # Create a canvas to contain the grid frame and scrollbar
+        canvas = tkinter.Canvas(self.grid, borderwidth=0, highlightthickness=0)
+        
+        # create scroll bars
+        hbar = tkinter.Scrollbar(self.grid, orient=tkinter.HORIZONTAL)
+        hbar.pack(side=tkinter.BOTTOM, fill=tkinter.X)
+        hbar.config(command=canvas.xview)
+        vbar = tkinter.Scrollbar(self.grid, orient=tkinter.VERTICAL)
+        vbar.pack(side=tkinter.RIGHT, fill=tkinter.Y)
+        vbar.config(command=canvas.yview)
+
+        # bind vertical scroll bar to mouse wheel
+        self.grid.bind_all("<MouseWheel>", lambda event: canvas.yview_scroll(int(-1*(event.delta/120)), "units"))
+
+        # bind horizontal scroll bar to shift mouse wheel
+        self.grid.bind_all("<Shift-MouseWheel>", lambda event: canvas.xview_scroll(int(-1*(event.delta/120)), "units"))
+
+        # bind vertical scroll bar to page up and page down keys
+        self.grid.bind_all("<Prior>", lambda event: canvas.yview_scroll(-1, "pages"))
+        self.grid.bind_all("<Next>", lambda event: canvas.yview_scroll(1, "pages"))
+
+        # bind horizontal scroll bar to shift page up and shift page down keys
+        self.grid.bind_all("<Shift-Prior>", lambda event: canvas.xview_scroll(-1, "pages"))
+        self.grid.bind_all("<Shift-Next>", lambda event: canvas.xview_scroll(1, "pages"))
+
+        # Create a frame to hold the grid entries
+        canvas.pack(side=tkinter.LEFT, fill=tkinter.BOTH, expand=True)
+        self.grid_frame = tkinter.Frame(canvas)
+        canvas.create_window((0, 0), window=self.grid_frame, anchor=tkinter.NW)
+
+        # Create labels for the index columns
+        for col, name in enumerate(data.index.names):
+            label = tkinter.Label(self.grid_frame, text=name, font=('Arial', 12, 'bold'))
+            label.grid(row=0, column=col)
+        
+        # Create a Tkinter Label for each index value in the multiindex and align under the respective column header
+        for row, index in enumerate(data.index):
+            for col, name in enumerate(data.index.names):
+                entry = tkinter.Label(self.grid_frame, text=index[col], font=('Arial', 12))
+                entry.grid(row=row+1, column=col)
+
+        # Create a Tkinter Label for the column headers
+        for col, header in enumerate(data.columns):
+            label = tkinter.Label(self.grid_frame, text=header, font=('Arial', 12, 'bold'))
+            label.grid(row=0, column=col+len(data.index.names))
+                
+        # Create a Tkinter Entry widget for each cell in the grid
+        self.entries = {}
+        for row, index in enumerate(data.index):
+            for col, column in enumerate(data.columns):
+                entry_var = tkinter.StringVar(value=data.at[index, column])
+                entry = tkinter.Entry(self.grid_frame, textvariable=entry_var, font=('Arial', 12))
+                entry.grid(row=row+1, column=col+len(data.index.names))
+                self.entries[(row, col)] = entry_var
+
+        # Update the canvas scroll region after the grid frame is created
+        self.grid_frame.update_idletasks()
+
+        # configure the canvas
+        canvas.config(yscrollcommand=vbar.set)
+        canvas.config(xscrollcommand=hbar.set)
+        canvas.config(scrollregion=canvas.bbox("all"))
+
+    def save(self, data=None):
+        # save the changes made to the grid
+        self.path = tkinter.filedialog.asksaveasfilename(initialdir=self.path[:self.path.rfind('/')],
+                                                         title='Save File',
+                                                         filetypes=(('Excel Files', '*.xlsx'), ('All Files', '*.*')))
+        if self.path:
+            if self.path[-5:] == '.xlsx':
+                writer = pd.ExcelWriter(self.path)
+                data.to_excel(writer, sheet_name=self.path[self.path.rfind('/') + 1:self.path.rfind('.')] + str(key))
+                writer.save()
+            elif self.path[-4:] == '.csv':
+                data.to_csv(self.path)
+            else:
+                self.path = self.path + '.xlsx'
+                writer = pd.ExcelWriter(self.path)
+                data.to_excel(writer, sheet_name=self.path[self.path.rfind('/') + 1:self.path.rfind('.')] + str(key))
+                writer.save()
+
+
 def main():
-    reg = () 
-    df = log(reg)
-    print(f'new : path to hplc files -> raw frame\nformat : -> frame with formated index and column\nwrite : file name -> excel file\nold : file name -> old data frame\ndf -> database name')
-    while True:
-        inp = input('\n--> ').split()
-        try:
-            if len(inp) == 2:
-                SwitchKey(inp[0], df)(inp[1])
-            else:
-                SwitchKey(inp[0], df)()
-        except TypeError:
-            try:
-                print(eval(' '.join(inp)))
-            except Exception:
-                print('didn\'t catch that')
-                continue
-        else:
-            if len(inp) == 2:
-                reg = SwitchKey(inp[0], df)(inp[1])
-                df = log(reg)
-                print(df)
-            else:
-                reg = SwitchKey(inp[0], df)()
-                df = log(reg)
-                print(df)
+    run = HPLC(master=tkinter.Tk())
+    run.master.mainloop()
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()
