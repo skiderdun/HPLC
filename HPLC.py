@@ -17,9 +17,16 @@ class HPLC:
         self.data = {}
         self.path = Path.cwd()
         self.path_key = self.path.stem
-        self.names = []
-        self.grid_frame = None
         self.checks = {}
+
+        # on startup, check to see if there is a data directory in project root directory
+        # if there is, import all files in the directory
+        # otherwise, create a data directory in the project root directory to store data files
+        if Path('data').is_dir():
+            for file in Path('data').glob('*.csv'):
+                self.data[file.stem] = pd.read_csv(file, index_col=0)
+        else:
+            Path('data').mkdir()
 
         # create a window to host buttons
         self.button_frame = tkinter.Frame(self.master)
@@ -41,17 +48,25 @@ class HPLC:
         self.process = tkinter.Button(self.button_frame, text="Process", command=self.process)
         self.process.pack(side=tkinter.LEFT)
 
+        # on close of the window, save the data to the data directory
+        self.master.protocol("WM_DELETE_WINDOW", self.on_closing)
+
+    def on_closing(self):
+        for key in self.data.keys():
+            self.data[key].to_csv(Path('data').joinpath(key + '.csv'))
+        self.master.destroy()
+
     def process(self):
         # get the path to the directory containing the data files
         self.path = Path(tkinter.filedialog.askdirectory())
         self.path_key = self.path.stem
         if self.path.is_dir():
             names = tkinter.simpledialog.askstring('Index Column Names', 'Enter the Index Column Names (comma-separated):')
-            self.names = [x.strip() for x in names.split(',')] + ['#']
-            self.from_hplc_files(path=self.path, names=self.names)
+            names = [x.strip() for x in names.split(',')] + ['#']
             self.checks[self.path_key] = tkinter.IntVar()
             self.checks[self.path_key].set(1)
-            tkinter.Checkbutton(self.button_frame, text=self.path_key, variable=self.checks[self.path_key]).pack(side=tkinter.LEFT)
+            tkinter.Checkbutton(self.button_frame, text=self.path_key, variable=self.checks[self.path_key]).pack(side=tkinter.BOTTOM, anchor=tkinter.S)
+            self.from_hplc_files(path=self.path, names=names)
 
     def import_file(self):
         # get the path to the file containing the data
@@ -76,7 +91,7 @@ class HPLC:
             # add check box to button frame to allow user to select the new dataframe
             self.checks[self.path.stem] = tkinter.IntVar()
             self.checks[self.path.stem].set(1)
-            tkinter.Checkbutton(self.button_frame, text=self.path.stem, variable=self.checks[self.path.stem]).pack(side=tkinter.BOTTOM)
+            tkinter.Checkbutton(self.button_frame, text=self.path.stem, variable=self.checks[self.path.stem]).pack(side=tkinter.BOTTOM, anchor=tkinter.S)
 
     def from_hplc_files(self, path, names):
         dirs = path.glob('*.xls*')
@@ -179,23 +194,23 @@ class HPLC:
 
         # Create a frame to hold the grid entries
         canvas.pack(side=tkinter.LEFT, fill=tkinter.BOTH, expand=True)
-        self.grid_frame = tkinter.Frame(canvas)
-        canvas.create_window((0, 0), window=self.grid_frame, anchor=tkinter.NW)
+        grid_frame = tkinter.Frame(canvas)
+        canvas.create_window((0, 0), window=grid_frame, anchor=tkinter.NW)
 
         # Create labels for the index columns
         for col, name in enumerate(self.data[key].index.names):
-            label = tkinter.Label(self.grid_frame, text=name, font=('Arial', 12, 'bold'))
+            label = tkinter.Label(grid_frame, text=name, font=('Arial', 12, 'bold'))
             label.grid(row=0, column=col)
         
         # Create a Tkinter Label for each index value in the multiindex and align under the respective column header
         for row, index in enumerate(self.data[key].index):
             for col, name in enumerate(self.data[key].index.names):
-                entry = tkinter.Label(self.grid_frame, text=index[col], font=('Arial', 12))
+                entry = tkinter.Label(grid_frame, text=index[col], font=('Arial', 12))
                 entry.grid(row=row+1, column=col)
 
         # Create a Tkinter Label for the column headers
         for col, header in enumerate(self.data[key].columns):
-            label = tkinter.Label(self.grid_frame, text=header, font=('Arial', 12, 'bold'))
+            label = tkinter.Label(grid_frame, text=header, font=('Arial', 12, 'bold'))
             label.grid(row=0, column=col+len(self.data[key].index.names))
                 
         # Create a Tkinter Entry widget for each cell in the grid
@@ -203,12 +218,12 @@ class HPLC:
         for row, index in enumerate(self.data[key].index):
             for col, column in enumerate(self.data[key].columns):
                 entry_var = tkinter.StringVar(value=self.data[key].at[index, column])
-                entry = tkinter.Entry(self.grid_frame, textvariable=entry_var, font=('Arial', 12))
+                entry = tkinter.Entry(grid_frame, textvariable=entry_var, font=('Arial', 12))
                 entry.grid(row=row+1, column=col+len(self.data[key].index.names))
                 self.entries[(row, col)] = entry_var
 
         # Update the canvas scroll region after the grid frame is created
-        self.grid_frame.update_idletasks()
+        grid_frame.update_idletasks()
 
         # configure the canvas
         canvas.config(yscrollcommand=vbar.set)
