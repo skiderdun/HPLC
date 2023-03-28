@@ -72,7 +72,7 @@ class HPLC:
         self.create_grid(Data)
 
     def from_hplc_files(self, path, names):
-        dirs = os.listdir(path)
+        dirs = path.glob('*.xls*')
         # import all files in the directory into a single dataframe     
 
         values = {}
