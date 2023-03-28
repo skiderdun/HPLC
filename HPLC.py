@@ -16,21 +16,21 @@ class HPLC:
 
         self.data = {}
         self.path = Path.cwd()
-        self.path_key = self.path.stem
         self.checks = {}
+
+        # create a window to host buttons
+        self.button_frame = tkinter.Frame(self.master)
+        self.button_frame.pack()
 
         # on startup, check to see if there is a data directory in project root directory
         # if there is, import all files in the directory
         # otherwise, create a data directory in the project root directory to store data files
         if Path('data').is_dir():
             for file in Path('data').glob('*.csv'):
-                self.data[file.stem] = pd.read_csv(file, index_col=0)
+                self.data[file.stem] = pd.read_csv(file)
+                self.check(file.stem)
         else:
             Path('data').mkdir()
-
-        # create a window to host buttons
-        self.button_frame = tkinter.Frame(self.master)
-        self.button_frame.pack()
 
         # create a button to import data from a file
         self.import_file = tkinter.Button(self.button_frame, text="Import File", command=self.import_file)
@@ -56,16 +56,23 @@ class HPLC:
             self.data[key].to_csv(Path('data').joinpath(key + '.csv'))
         self.master.destroy()
 
+    def check(self, key = None):
+        # if no key is provided, return a list of all checked keys
+        if key == None:
+            return [key for key in self.checks.keys() if self.checks[key].get() == 1]
+        # otherwise create a check box for the key
+        else:
+            self.checks[key] = tkinter.IntVar()
+            self.checks[key].set(1)
+            tkinter.Checkbutton(self.button_frame, text=key, variable=self.checks[key]).pack(side=tkinter.BOTTOM, anchor=tkinter.S)
+
     def process(self):
         # get the path to the directory containing the data files
         self.path = Path(tkinter.filedialog.askdirectory())
-        self.path_key = self.path.stem
         if self.path.is_dir():
             names = tkinter.simpledialog.askstring('Index Column Names', 'Enter the Index Column Names (comma-separated):')
             names = [x.strip() for x in names.split(',')] + ['#']
-            self.checks[self.path_key] = tkinter.IntVar()
-            self.checks[self.path_key].set(1)
-            tkinter.Checkbutton(self.button_frame, text=self.path_key, variable=self.checks[self.path_key]).pack(side=tkinter.BOTTOM, anchor=tkinter.S)
+            self.check(key=self.path.stem)
             self.from_hplc_files(path=self.path, names=names)
 
     def import_file(self):
@@ -88,10 +95,7 @@ class HPLC:
                 except:
                     tkinter.messagebox.showerror('File Type Error', 'File Type Not Recognized')
         
-            # add check box to button frame to allow user to select the new dataframe
-            self.checks[self.path.stem] = tkinter.IntVar()
-            self.checks[self.path.stem].set(1)
-            tkinter.Checkbutton(self.button_frame, text=self.path.stem, variable=self.checks[self.path.stem]).pack(side=tkinter.BOTTOM, anchor=tkinter.S)
+            self.check(key=self.path.stem)
 
     def from_hplc_files(self, path, names):
         dirs = path.glob('*.xls*')
@@ -139,7 +143,7 @@ class HPLC:
 
         self.data[self.path.stem] = self.data[self.path.stem].astype(float)
 
-        self.data[self.path_key] = self.data[self.path.stem]
+        self.data[self.path.stem] = self.data[self.path.stem]
         print(self.data[self.path.stem])
         self.create_grid(self.path.stem)
     
@@ -150,17 +154,15 @@ class HPLC:
         # if no file extension is given, add .xlsx
         if self.path.suffix == '':
             self.path = self.path.with_suffix('.xlsx')
-        self.path_key = self.path.stem
         file_extension = self.path.suffix.lower()
-        for key in self.checks.keys():
-            if self.checks[key].get() == 1:
-                        if file_extension == '.xlsx' or file_extension == '.xls':
-                            with pd.ExcelWriter(str(self.path_key) + '_' + str(key) + '.xlsx') as writer:
-                                self.data[key].to_excel(writer, sheet_name=str(key))
-                        elif file_extension == '.ods':
-                            self.data[key].to_excel(str(self.path_key) + '_' + str(key) + '.ods', engine='odf')
-                        else:
-                            self.data[key].to_csv(str(self.path_key) + '_' + str(key) + '.csv')                        
+        for key in self.check():
+            if file_extension == '.xlsx' or file_extension == '.xls':
+                with pd.ExcelWriter(str(self.path.stem) + '_' + str(key) + '.xlsx') as writer:
+                    self.data[key].to_excel(writer, sheet_name=str(key))
+            elif file_extension == '.ods':
+                self.data[key].to_excel(str(self.path.stem) + '_' + str(key) + '.ods', engine='odf')
+            else:
+                self.data[key].to_csv(str(self.path.stem) + '_' + str(key) + '.csv')                        
 
     def create_grid(self, key=None):
         #  display the data in a excel like grid in a new TopLevel window
@@ -232,14 +234,13 @@ class HPLC:
 
     def display(self):
         # create a grid for each data frame marked in checkboxes
-        for key in self.checks.keys():
-            if self.checks[key].get() == 1:
-                self.create_grid(key)
-            elif self.checks[key].get() == 0:
-                # get grids with the title of the data frame and destroy them
-                for grid in self.master.winfo_children():
-                    if isinstance(grid, tkinter.Toplevel) and grid.title() == str(key):
-                        grid.destroy()
+        for key in self.check():
+            self.create_grid(key)
+
+        # get grids with the title of the data frame and destroy them
+        for grid in self.master.winfo_children():
+            if isinstance(grid, tkinter.Toplevel) and grid.title() not in self.check():
+                grid.destroy()
 
 def main():
     run = HPLC(master=tkinter.Tk())
