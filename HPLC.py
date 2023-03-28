@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
-import os
+from pathlib import Path
 
 class HPLC:
     def __init__(self, master):
@@ -15,8 +15,8 @@ class HPLC:
         master.title("HPLC")
 
         self.data = {}
-        self.path = os.getcwd()
-        self.path_key = self.path[self.path.rfind('/') + 1:self.path.rfind('.')]
+        self.path = Path.cwd()
+        self.path_key = self.path.stem
         self.names = []
         self.grid_frame = None
 
@@ -38,18 +38,18 @@ class HPLC:
 
     def process(self):
         # get the path to the directory containing the data files
-        self.path = tkinter.filedialog.askdirectory()
-        self.path_key = self.path[self.path.rfind('/') + 1:self.path.rfind('.')]
-        if os.path.isdir(self.path):
+        self.path = Path(tkinter.filedialog.askdirectory())
+        self.path_key = self.path.stem
+        if self.path.isdir():
             names = tkinter.simpledialog.askstring('Index Column Names', 'Enter the Index Column Names (comma-separated):')
             self.names = [x.strip() for x in names.split(',')] + ['#']
             self.from_hplc_files(path=self.path, names=self.names)
 
     def import_file(self):
         # get the path to the file containing the data
-        self.path = tkinter.filedialog.askopenfilename()
-        if os.path.isfile(self.path):
-            file_extension = os.path.splitext(self.path)[1].lower()
+        self.path = Path(tkinter.filedialog.askopenfilename())
+        if self.path.is_file():
+            file_extension = self.path.suffix.lower()
             ind_cols = tkinter.simpledialog.askinteger('Index', 'Number of Index Levels?:')
             if file_extension == '.csv':
                 self.new_csv(path=self.path, ind_cols=int(ind_cols))
@@ -60,14 +60,14 @@ class HPLC:
         # import the csv file into a dataframe
         Data = pd.read_csv(path, index_col=list(np.arange(0,ind_cols)))
         Data = Data.astype(float)
-        self.data[self.path[self.path.rfind('/') + 1:self.path.rfind('.')]] = Data
+        self.data[self.path.stem] = Data
         self.create_grid(Data)
     
     def new_excel(self, path, ind_cols):
         # import the excel file into a dataframe
         Data = pd.read_excel(path, index_col=list(np.arange(0,ind_cols)))
         Data = Data.astype(float)
-        self.data[self.path[self.path.rfind('/') + 1:self.path.rfind('.')]] = Data
+        self.data[self.path.stem] = Data
         print(Data)
         self.create_grid(Data)
 
@@ -123,23 +123,23 @@ class HPLC:
     
     def save_as(self):
         def save_data():
-            self.path = tkinter.filedialog.asksaveasfilename(initialdir=self.path[:self.path.rfind('/')],
+            self.path = Path(tkinter.filedialog.asksaveasfilename(initialdir=self.path.parent,
                                                     title='Save File',
-                                                    filetypes=(('Excel Files', '*.xlsx'), ('OpenDocument', '*.ods'), ('All Files', '*.*')))
+                                                    filetypes=(('Excel Files', '*.xlsx'), ('OpenDocument', '*.ods'), ('All Files', '*.*'))))
             # if no file extension is given, add .xlsx
-            if self.path.find('.') == -1:
-                self.path = self.path + '.xlsx'
-            self.path_key = self.path[:self.path.rfind('.')]
-            file_extension = os.path.splitext(self.path)[1].lower()
+            if self.path.suffix == '':
+                self.path = self.path.with_suffix('.xlsx')
+            self.path_key = self.path.stem
+            file_extension = self.path.suffix.lower()
             for key in self.checks.keys():
                 if self.checks[key].get() == 1:
                             if file_extension == '.xlsx' or file_extension == '.xls':
-                                with pd.ExcelWriter(self.path_key + '_' + str(key) + '.xlsx') as writer:
+                                with pd.ExcelWriter(str(self.path_key) + '_' + str(key) + '.xlsx') as writer:
                                     self.data[key].to_excel(writer, sheet_name=str(key))
                             elif file_extension == '.ods':
-                                self.data[key].to_excel(self.path_key + '_' + str(key) + '.ods')
+                                self.data[key].to_excel(str(self.path_key) + '_' + str(key) + '.ods', engine='odf')
                             else:
-                                self.data[key].to_csv(self.path_key + '_' + str(key) + '.csv')
+                                self.data[key].to_csv(str(self.path_key) + '_' + str(key) + '.csv')
                             
             self.save_dialog.destroy()
         
@@ -160,7 +160,7 @@ class HPLC:
     def create_grid(self, data=None):
         #  display the data in a excel like grid in a new TopLevel window
         self.grid = tkinter.Toplevel(self.master, takefocus=True, padx=10, pady=10)
-        self.grid.title(self.path[self.path.rfind('/') + 1:self.path.rfind('.')])
+        self.grid.title(self.path_key)
 
         # Create a canvas to contain the grid frame and scrollbar
         canvas = tkinter.Canvas(self.grid, borderwidth=0, highlightthickness=0)
