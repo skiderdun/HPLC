@@ -145,8 +145,7 @@ class HPLC:
                         elif file_extension == '.ods':
                             self.data[key].to_excel(str(self.path_key) + '_' + str(key) + '.ods', engine='odf')
                         else:
-                            self.data[key].to_csv(str(self.path_key) + '_' + str(key) + '.csv')
-                            
+                            self.data[key].to_csv(str(self.path_key) + '_' + str(key) + '.csv')                        
 
     def create_grid(self, key=None):
         #  display the data in a excel like grid in a new TopLevel window
