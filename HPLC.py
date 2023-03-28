@@ -36,20 +36,30 @@ class HPLC:
         self.import_file = tkinter.Button(self.button_frame, text="Import File", command=self.import_file)
         self.import_file.pack(side=tkinter.LEFT)
 
+        # create a button to process data
+        self.process = tkinter.Button(self.button_frame, text="Process", command=self.process)
+        self.process.pack(side=tkinter.LEFT)
+
         # save as button
         self.save_as = tkinter.Button(self.button_frame, text="Save As", command=self.save_as)
         self.save_as.pack(side=tkinter.LEFT)
+
+        # button to clear data in the data dictionary and the data directory
+        self.clear = tkinter.Button(self.button_frame, text="Clear", command=self.clear)
+        self.clear.pack(side=tkinter.LEFT)
 
         # create a button to to display the data
         self.display = tkinter.Button(self.button_frame, text="Display", command=self.display)
         self.display.pack(side=tkinter.LEFT)
 
-        # create a button to process data
-        self.process = tkinter.Button(self.button_frame, text="Process", command=self.process)
-        self.process.pack(side=tkinter.LEFT)
-
         # on close of the window, save the data to the data directory
         self.master.protocol("WM_DELETE_WINDOW", self.on_closing)
+
+    def clear(self):
+        # clear checked data from the data dictionary and the data directory
+        for key in self.check():
+            self.data.pop(key)
+            Path('data').joinpath(key + '.csv').unlink()
 
     def on_closing(self):
         for key in self.data.keys():
@@ -59,12 +69,14 @@ class HPLC:
     def check(self, key = None):
         # if no key is provided, return a list of all checked keys
         if key == None:
-            return [key for key in self.checks.keys() if self.checks[key].get() == 1]
+            return [key for key in self.checks.keys() if self.checks[key][0].get() == 1 and key != 'All']
         # otherwise create a check box for the key
         else:
-            self.checks[key] = tkinter.IntVar()
-            self.checks[key].set(1)
-            tkinter.Checkbutton(self.button_frame, text=key, variable=self.checks[key]).pack(side=tkinter.BOTTOM, anchor=tkinter.S)
+
+            self.checks[key] = [0, 0]
+            self.checks[key][0] = tkinter.IntVar()
+            self.checks[key][1] = tkinter.Checkbutton(self.button_frame, text=key, variable=self.checks[key][0], onvalue=1, offvalue=0)
+            self.checks[key][1].pack(side=tkinter.BOTTOM, anchor=tkinter.S)
 
     def process(self):
         # get the path to the directory containing the data files
@@ -81,6 +93,7 @@ class HPLC:
         if self.path.is_file():
             file_extension = self.path.suffix.lower()
             ind_cols = tkinter.simpledialog.askinteger('Index', 'Number of Index Levels?:')
+
             if file_extension == '.xlsx' or file_extension == '.xls':
                 # import the excel file into a dataframe
                 self.data[self.path.stem] = pd.read_excel(self.path, index_col=list(np.arange(0,ind_cols)))
@@ -94,7 +107,7 @@ class HPLC:
                     self.data[self.path.stem] = pd.read_csv(self.path, index_col=list(np.arange(0,ind_cols)))
                 except:
                     tkinter.messagebox.showerror('File Type Error', 'File Type Not Recognized')
-        
+                    return
             self.check(key=self.path.stem)
 
     def from_hplc_files(self, path, names):
@@ -166,33 +179,33 @@ class HPLC:
 
     def create_grid(self, key=None):
         #  display the data in a excel like grid in a new TopLevel window
-        self.grid = tkinter.Toplevel(self.master, takefocus=True, padx=10, pady=10)
-        self.grid.title(key)
+        grid = tkinter.Toplevel(self.master, takefocus=True, padx=10, pady=10)
+        grid.title(key)
 
         # Create a canvas to contain the grid frame and scrollbar
-        canvas = tkinter.Canvas(self.grid, borderwidth=0, highlightthickness=0)
+        canvas = tkinter.Canvas(grid, borderwidth=0, highlightthickness=0)
         
         # create scroll bars
-        hbar = tkinter.Scrollbar(self.grid, orient=tkinter.HORIZONTAL)
+        hbar = tkinter.Scrollbar(grid, orient=tkinter.HORIZONTAL)
         hbar.pack(side=tkinter.BOTTOM, fill=tkinter.X)
         hbar.config(command=canvas.xview)
-        vbar = tkinter.Scrollbar(self.grid, orient=tkinter.VERTICAL)
+        vbar = tkinter.Scrollbar(grid, orient=tkinter.VERTICAL)
         vbar.pack(side=tkinter.RIGHT, fill=tkinter.Y)
         vbar.config(command=canvas.yview)
 
         # bind vertical scroll bar to mouse wheel
-        self.grid.bind_all("<MouseWheel>", lambda event: canvas.yview_scroll(int(-1*(event.delta/120)), "units"))
+        grid.bind_all("<MouseWheel>", lambda event: canvas.yview_scroll(int(-1*(event.delta/120)), "units"))
 
         # bind horizontal scroll bar to shift mouse wheel
-        self.grid.bind_all("<Shift-MouseWheel>", lambda event: canvas.xview_scroll(int(-1*(event.delta/120)), "units"))
+        grid.bind_all("<Shift-MouseWheel>", lambda event: canvas.xview_scroll(int(-1*(event.delta/120)), "units"))
 
         # bind vertical scroll bar to page up and page down keys
-        self.grid.bind_all("<Prior>", lambda event: canvas.yview_scroll(-1, "pages"))
-        self.grid.bind_all("<Next>", lambda event: canvas.yview_scroll(1, "pages"))
+        grid.bind_all("<Prior>", lambda event: canvas.yview_scroll(-1, "pages"))
+        grid.bind_all("<Next>", lambda event: canvas.yview_scroll(1, "pages"))
 
         # bind horizontal scroll bar to shift page up and shift page down keys
-        self.grid.bind_all("<Shift-Prior>", lambda event: canvas.xview_scroll(-1, "pages"))
-        self.grid.bind_all("<Shift-Next>", lambda event: canvas.xview_scroll(1, "pages"))
+        grid.bind_all("<Shift-Prior>", lambda event: canvas.xview_scroll(-1, "pages"))
+        grid.bind_all("<Shift-Next>", lambda event: canvas.xview_scroll(1, "pages"))
 
         # Create a frame to hold the grid entries
         canvas.pack(side=tkinter.LEFT, fill=tkinter.BOTH, expand=True)
@@ -205,10 +218,15 @@ class HPLC:
             label.grid(row=0, column=col)
         
         # Create a Tkinter Label for each index value in the multiindex and align under the respective column header
-        for row, index in enumerate(self.data[key].index):
-            for col, name in enumerate(self.data[key].index.names):
-                entry = tkinter.Label(grid_frame, text=index[col], font=('Arial', 12))
-                entry.grid(row=row+1, column=col)
+        if len(self.data[key].index.names) > 1:
+            for row, index in enumerate(self.data[key].index):
+                for col, name in enumerate(self.data[key].index.names):
+                    entry = tkinter.Label(grid_frame, text=index[col], font=('Arial', 12))
+                    entry.grid(row=row+1, column=col)
+        else:
+            for row, index in enumerate(self.data[key].index):
+                entry = tkinter.Label(grid_frame, text=index, font=('Arial', 12))
+                entry.grid(row=row+1, column=0)
 
         # Create a Tkinter Label for the column headers
         for col, header in enumerate(self.data[key].columns):
