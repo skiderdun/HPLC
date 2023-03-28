@@ -1,0 +1,1 @@
+WARNING *** OLE2 inconsistency: SSCS size is 0 but SSAT size is non-zero

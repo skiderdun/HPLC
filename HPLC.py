@@ -19,6 +19,7 @@ class HPLC:
         self.path_key = self.path.stem
         self.names = []
         self.grid_frame = None
+        self.checks = {}
 
         # create a window to host buttons
         self.button_frame = tkinter.Frame(self.master)
@@ -32,6 +33,10 @@ class HPLC:
         self.save_as = tkinter.Button(self.button_frame, text="Save As", command=self.save_as)
         self.save_as.pack(side=tkinter.LEFT)
 
+        # create a button to to display the data
+        self.display = tkinter.Button(self.button_frame, text="Display", command=self.display)
+        self.display.pack(side=tkinter.LEFT)
+
         # create a button to process data
         self.process = tkinter.Button(self.button_frame, text="Process", command=self.process)
         self.process.pack(side=tkinter.LEFT)
@@ -40,10 +45,13 @@ class HPLC:
         # get the path to the directory containing the data files
         self.path = Path(tkinter.filedialog.askdirectory())
         self.path_key = self.path.stem
-        if self.path.isdir():
+        if self.path.is_dir():
             names = tkinter.simpledialog.askstring('Index Column Names', 'Enter the Index Column Names (comma-separated):')
             self.names = [x.strip() for x in names.split(',')] + ['#']
             self.from_hplc_files(path=self.path, names=self.names)
+            self.checks[self.path_key] = tkinter.IntVar()
+            self.checks[self.path_key].set(1)
+            tkinter.Checkbutton(self.button_frame, text=self.path_key, variable=self.checks[self.path_key]).pack(side=tkinter.LEFT)
 
     def import_file(self):
         # get the path to the file containing the data
@@ -51,25 +59,24 @@ class HPLC:
         if self.path.is_file():
             file_extension = self.path.suffix.lower()
             ind_cols = tkinter.simpledialog.askinteger('Index', 'Number of Index Levels?:')
-            if file_extension == '.csv':
-                self.new_csv(path=self.path, ind_cols=int(ind_cols))
-            elif file_extension == '.xlsx' or file_extension == '.xls':
-                self.new_excel(path=self.path, ind_cols=int(ind_cols))
-
-    def new_csv(self, path, ind_cols):
-        # import the csv file into a dataframe
-        Data = pd.read_csv(path, index_col=list(np.arange(0,ind_cols)))
-        Data = Data.astype(float)
-        self.data[self.path.stem] = Data
-        self.create_grid(Data)
-    
-    def new_excel(self, path, ind_cols):
-        # import the excel file into a dataframe
-        Data = pd.read_excel(path, index_col=list(np.arange(0,ind_cols)))
-        Data = Data.astype(float)
-        self.data[self.path.stem] = Data
-        print(Data)
-        self.create_grid(Data)
+            if file_extension == '.xlsx' or file_extension == '.xls':
+                # import the excel file into a dataframe
+                self.data[self.path.stem] = pd.read_excel(self.path, index_col=list(np.arange(0,ind_cols)))
+                print(self.data[self.path.stem])
+            elif file_extension == '.ods':
+                # import the ods file into a dataframe
+                self.data[self.path.stem] = pd.read_excel(self.path, index_col=list(np.arange(0,ind_cols)), engine='odf')
+            else:
+                try: 
+                    # import the csv file into a dataframe
+                    self.data[self.path.stem] = pd.read_csv(self.path, index_col=list(np.arange(0,ind_cols)))
+                except:
+                    tkinter.messagebox.showerror('File Type Error', 'File Type Not Recognized')
+        
+            # add check box to button frame to allow user to select the new dataframe
+            self.checks[self.path.stem] = tkinter.IntVar()
+            self.checks[self.path.stem].set(1)
+            tkinter.Checkbutton(self.button_frame, text=self.path.stem, variable=self.checks[self.path.stem]).pack(side=tkinter.BOTTOM)
 
     def from_hplc_files(self, path, names):
         dirs = path.glob('*.xls*')
@@ -79,7 +86,7 @@ class HPLC:
         n = 0
         for file in dirs:
                 
-            with xlrd.open_workbook(os.path.join(path, file), logfile=open(os.devnull, 'w')) as tempfile:
+            with xlrd.open_workbook(self.path.joinpath(path, file), logfile=open(Path('log.txt'), 'w')) as tempfile:
             
                 temp = pd.read_excel(tempfile, index_col=0)
 
@@ -94,32 +101,32 @@ class HPLC:
 
             values[index] = dict(zip(columns,data))
 
-        Data = pd.DataFrame(values).transpose()
+        self.data[self.path.stem] = pd.DataFrame(values).transpose()
             
-        Data = Data.fillna(0.000)
+        self.data[self.path.stem] = self.data[self.path.stem].fillna(0.000)
 
         if names[-1] != '#':
             names = names + ['#']
 
-        Data.index.names = names
+        self.data[self.path.stem].index.names = names
 
-        Data.index = Data.index.map(lambda x: tuple([int(y) if isinstance(y, str) and y.isdigit() else y for y in x])
+        self.data[self.path.stem].index = self.data[self.path.stem].index.map(lambda x: tuple([int(y) if isinstance(y, str) and y.isdigit() else y for y in x])
                                     if not isinstance(x, float) and not isinstance(x, int) else x)
 
-        Data.sort_index(inplace=True)
+        self.data[self.path.stem].sort_index(inplace=True)
 
               
         new_index = []
-        for x in np.arange(Data.index.size):
-            new_index.append(Data.index[x][0:-1] + (x,))
-        new_index = pd.MultiIndex.from_tuples(new_index, names=Data.index.names)
-        Data.index = new_index
+        for x in np.arange(self.data[self.path.stem].index.size):
+            new_index.append(self.data[self.path.stem].index[x][0:-1] + (x,))
+        new_index = pd.MultiIndex.from_tuples(new_index, names=self.data[self.path.stem].index.names)
+        self.data[self.path.stem].index = new_index
 
-        Data = Data.astype(float)
+        self.data[self.path.stem] = self.data[self.path.stem].astype(float)
 
-        self.data[self.path_key] = Data
-        print(Data)
-        self.create_grid(Data)
+        self.data[self.path_key] = self.data[self.path.stem]
+        print(self.data[self.path.stem])
+        self.create_grid(self.path.stem)
     
     def save_as(self):
         def save_data():
@@ -157,10 +164,10 @@ class HPLC:
             self.checks[key] = tkinter.IntVar()
             tkinter.Checkbutton(self.save_dialog, text=key, variable=self.checks[key]).pack(side=tkinter.TOP)
 
-    def create_grid(self, data=None):
+    def create_grid(self, key=None):
         #  display the data in a excel like grid in a new TopLevel window
         self.grid = tkinter.Toplevel(self.master, takefocus=True, padx=10, pady=10)
-        self.grid.title(self.path_key)
+        self.grid.title(key)
 
         # Create a canvas to contain the grid frame and scrollbar
         canvas = tkinter.Canvas(self.grid, borderwidth=0, highlightthickness=0)
@@ -193,28 +200,28 @@ class HPLC:
         canvas.create_window((0, 0), window=self.grid_frame, anchor=tkinter.NW)
 
         # Create labels for the index columns
-        for col, name in enumerate(data.index.names):
+        for col, name in enumerate(self.data[key].index.names):
             label = tkinter.Label(self.grid_frame, text=name, font=('Arial', 12, 'bold'))
             label.grid(row=0, column=col)
         
         # Create a Tkinter Label for each index value in the multiindex and align under the respective column header
-        for row, index in enumerate(data.index):
-            for col, name in enumerate(data.index.names):
+        for row, index in enumerate(self.data[key].index):
+            for col, name in enumerate(self.data[key].index.names):
                 entry = tkinter.Label(self.grid_frame, text=index[col], font=('Arial', 12))
                 entry.grid(row=row+1, column=col)
 
         # Create a Tkinter Label for the column headers
-        for col, header in enumerate(data.columns):
+        for col, header in enumerate(self.data[key].columns):
             label = tkinter.Label(self.grid_frame, text=header, font=('Arial', 12, 'bold'))
-            label.grid(row=0, column=col+len(data.index.names))
+            label.grid(row=0, column=col+len(self.data[key].index.names))
                 
         # Create a Tkinter Entry widget for each cell in the grid
         self.entries = {}
-        for row, index in enumerate(data.index):
-            for col, column in enumerate(data.columns):
-                entry_var = tkinter.StringVar(value=data.at[index, column])
+        for row, index in enumerate(self.data[key].index):
+            for col, column in enumerate(self.data[key].columns):
+                entry_var = tkinter.StringVar(value=self.data[key].at[index, column])
                 entry = tkinter.Entry(self.grid_frame, textvariable=entry_var, font=('Arial', 12))
-                entry.grid(row=row+1, column=col+len(data.index.names))
+                entry.grid(row=row+1, column=col+len(self.data[key].index.names))
                 self.entries[(row, col)] = entry_var
 
         # Update the canvas scroll region after the grid frame is created
@@ -225,7 +232,16 @@ class HPLC:
         canvas.config(xscrollcommand=hbar.set)
         canvas.config(scrollregion=canvas.bbox("all"))
 
-
+    def display(self):
+        # create a grid for each data frame marked in checkboxes
+        for key in self.checks.keys():
+            if self.checks[key].get() == 1:
+                self.create_grid(key)
+            elif self.checks[key].get() == 0:
+                # get grids with the title of the data frame and destroy them
+                for grid in self.master.winfo_children():
+                    if isinstance(grid, tkinter.Toplevel) and grid.title() == str(key):
+                        grid.destroy()
 
 def main():
     run = HPLC(master=tkinter.Tk())
