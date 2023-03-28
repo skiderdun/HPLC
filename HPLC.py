@@ -129,40 +129,24 @@ class HPLC:
         self.create_grid(self.path.stem)
     
     def save_as(self):
-        def save_data():
-            self.path = Path(tkinter.filedialog.asksaveasfilename(initialdir=self.path.parent,
-                                                    title='Save File',
-                                                    filetypes=(('Excel Files', '*.xlsx'), ('OpenDocument', '*.ods'), ('All Files', '*.*'))))
-            # if no file extension is given, add .xlsx
-            if self.path.suffix == '':
-                self.path = self.path.with_suffix('.xlsx')
-            self.path_key = self.path.stem
-            file_extension = self.path.suffix.lower()
-            for key in self.checks.keys():
-                if self.checks[key].get() == 1:
-                            if file_extension == '.xlsx' or file_extension == '.xls':
-                                with pd.ExcelWriter(str(self.path_key) + '_' + str(key) + '.xlsx') as writer:
-                                    self.data[key].to_excel(writer, sheet_name=str(key))
-                            elif file_extension == '.ods':
-                                self.data[key].to_excel(str(self.path_key) + '_' + str(key) + '.ods', engine='odf')
-                            else:
-                                self.data[key].to_csv(str(self.path_key) + '_' + str(key) + '.csv')
+        self.path = Path(tkinter.filedialog.asksaveasfilename(initialdir=self.path.parent,
+                                                title='Save File',
+                                                filetypes=(('Excel Files', '*.xlsx'), ('OpenDocument', '*.ods'), ('All Files', '*.*'))))
+        # if no file extension is given, add .xlsx
+        if self.path.suffix == '':
+            self.path = self.path.with_suffix('.xlsx')
+        self.path_key = self.path.stem
+        file_extension = self.path.suffix.lower()
+        for key in self.checks.keys():
+            if self.checks[key].get() == 1:
+                        if file_extension == '.xlsx' or file_extension == '.xls':
+                            with pd.ExcelWriter(str(self.path_key) + '_' + str(key) + '.xlsx') as writer:
+                                self.data[key].to_excel(writer, sheet_name=str(key))
+                        elif file_extension == '.ods':
+                            self.data[key].to_excel(str(self.path_key) + '_' + str(key) + '.ods', engine='odf')
+                        else:
+                            self.data[key].to_csv(str(self.path_key) + '_' + str(key) + '.csv')
                             
-            self.save_dialog.destroy()
-        
-        # new window to select which data frames to save
-        self.save_dialog = tkinter.Toplevel(self.master, takefocus=True, padx=10, pady=10)
-        self.save_dialog.title('Save As')
-
-        # create a button to save the selected data frames
-        self.save_button = tkinter.Button(self.save_dialog, text="Save", command=save_data)
-        self.save_button.pack(side=tkinter.BOTTOM)
-
-        # each entry in self.data has a check button and is labeled with the name of the data frame
-        self.checks = {}
-        for key in self.data.keys():
-            self.checks[key] = tkinter.IntVar()
-            tkinter.Checkbutton(self.save_dialog, text=key, variable=self.checks[key]).pack(side=tkinter.TOP)
 
     def create_grid(self, key=None):
         #  display the data in a excel like grid in a new TopLevel window
