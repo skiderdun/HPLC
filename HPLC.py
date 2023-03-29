@@ -59,6 +59,8 @@ class HPLC:
         # clear checked data from the data dictionary and the data directory
         for key in self.check():
             self.data.pop(key)
+            self.checks[key][1].destroy()
+            self.checks.pop(key)
             Path('data').joinpath(key + '.csv').unlink()
 
     def on_closing(self):
@@ -82,10 +84,10 @@ class HPLC:
         # get the path to the directory containing the data files
         self.path = Path(tkinter.filedialog.askdirectory())
         if self.path.is_dir():
-            names = tkinter.simpledialog.askstring('Index Column Names', 'Enter the Index Column Names (comma-separated):')
+            names = tkinter.simpledialog.askstring('Variables', 'Enter The Names of the Variables Your Data is Testing\n Example: Time,Temprature \n(separated by commas):')
             names = [x.strip() for x in names.split(',')] + ['#']
             self.check(key=self.path.stem)
-            self.from_hplc_files(path=self.path, names=names)
+            self.hplc_import(path=self.path, names=names)
 
     def import_file(self):
         # get the path to the file containing the data
@@ -110,55 +112,44 @@ class HPLC:
                     return
             self.check(key=self.path.stem)
 
-    def from_hplc_files(self, path, names):
-        dirs = path.glob('*.xls*')
-        # import all files in the directory into a single dataframe     
-
-        values = {}
-        n = 0
-        for file in dirs:
-                
-            with xlrd.open_workbook(self.path.joinpath(path, file), logfile=open(Path('log.txt'), 'w')) as tempfile:
+    def hplc_import(self, path, names = None):
+        self.data[self.path.stem] = pd.DataFrame()
+        for file in path.glob('*.xls'):
             
-                temp = pd.read_excel(tempfile, index_col=0)
+            temp = pd.read_excel(file, skiprows=1)
+            temp = temp.transpose()
+            temp.columns = temp.iloc[0]
+            temp = temp.drop(temp.index[0])
+            temp = temp.drop(columns=['Name'])
+            temp.dropna(axis=1, how='all', inplace=True)
+            temp.Sample_Name.fillna(method='ffill', inplace=True)
+            temp.dropna(axis=0, how='any', inplace=True)
+            temp = temp.transpose()
+        
+            self.data[self.path.stem] = pd.concat([self.data[self.path.stem], temp], axis=1)
+        self.data[self.path.stem].columns = [x for x in range(len(self.data[self.path.stem].columns))]
+        self.data[self.path.stem].index.name = '#'
+        self.data[self.path.stem] = self.data[self.path.stem].transpose()
+        # change any nan values to 0
+        self.data[self.path.stem].fillna(0, inplace=True)
 
-            columns =  list(temp.drop(columns = 'Unnamed: 1').dropna().index[1:])
-            index = [x.split(' ') + [n] for x in list(set(temp['Unnamed: 1'].dropna())) if x != 'Sample_Name'][0]
+        # if names are provided, split the Sampel_Name column into the names provided
+        if names != None:
+            for i in range(len(names)-1):
+                self.data[self.path.stem][names[i]] = self.data[self.path.stem]['Sample_Name'].str.split(' ').str[i]
+                # bring the names to the front of the dataframe
+                self.data[self.path.stem] = self.data[self.path.stem][[names[i]] + [col for col in self.data[self.path.stem].columns if col != names[i]]]
+            self.data[self.path.stem].drop(columns=['Sample_Name'], inplace=True)
 
-            n += 1
-            
-            data = [float(temp.at[column,"Unnamed: 2"]) for column in columns]       
-            
-            index = tuple(index)
-
-            values[index] = dict(zip(columns,data))
-
-        self.data[self.path.stem] = pd.DataFrame(values).transpose()
-            
-        self.data[self.path.stem] = self.data[self.path.stem].fillna(0.000)
-
-        if names[-1] != '#':
-            names = names + ['#']
-
-        self.data[self.path.stem].index.names = names
-
-        self.data[self.path.stem].index = self.data[self.path.stem].index.map(lambda x: tuple([int(y) if isinstance(y, str) and y.isdigit() else y for y in x])
-                                    if not isinstance(x, float) and not isinstance(x, int) else x)
-
-        self.data[self.path.stem].sort_index(inplace=True)
-
-              
-        new_index = []
-        for x in np.arange(self.data[self.path.stem].index.size):
-            new_index.append(self.data[self.path.stem].index[x][0:-1] + (x,))
-        new_index = pd.MultiIndex.from_tuples(new_index, names=self.data[self.path.stem].index.names)
-        self.data[self.path.stem].index = new_index
-
-        self.data[self.path.stem] = self.data[self.path.stem].astype(float)
-
+        # check if any data can be converted to numeric
+        for col in self.data[self.path.stem].columns:
+            try:
+                self.data[self.path.stem][col] = pd.to_numeric(self.data[self.path.stem][col])
+            except:
+                pass
+        
         self.data[self.path.stem] = self.data[self.path.stem]
         print(self.data[self.path.stem])
-        self.create_grid(self.path.stem)
     
     def save_as(self):
         self.path = Path(tkinter.filedialog.asksaveasfilename(initialdir=self.path.parent,
