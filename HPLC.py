@@ -168,6 +168,94 @@ class HPLC:
             else:
                 self.data[key].to_csv(str(self.path.stem) + '_' + str(key) + '.csv')                        
 
+    def create_grid_new(self, key=None):
+        #  display the data in a excel like grid in a new TopLevel window
+        grid = tkinter.Toplevel(self.master, takefocus=True, padx=10, pady=10)
+        grid.title(key)
+
+        row_canvas = tkinter.Canvas(grid, borderwidth=0, highlightthickness=0)
+        row_canvas.pack(side=tkinter.TOP, fill=tkinter.X)
+        row_canvas.config(scrollregion=row_canvas.bbox(tkinter.ALL))
+        
+        col_canvas = tkinter.Canvas(grid, borderwidth=0, highlightthickness=0)
+        col_canvas.pack(side=tkinter.LEFT, fill=tkinter.Y)
+        col_canvas.config(scrollregion=col_canvas.bbox(tkinter.ALL))
+
+        grid_canvas = tkinter.Canvas(grid, borderwidth=0, highlightthickness=0)
+        grid_canvas.pack(side=tkinter.LEFT, fill=tkinter.BOTH, expand=True)
+        grid_canvas.config(scrollregion=grid_canvas.bbox(tkinter.ALL))
+
+        # create scroll bars
+        hbar = tkinter.Scrollbar(grid, orient=tkinter.HORIZONTAL)
+        hbar.pack(side=tkinter.BOTTOM, fill=tkinter.X)
+        hbar.config(command=grid_canvas.xview)
+        vbar = tkinter.Scrollbar(grid, orient=tkinter.VERTICAL)
+        vbar.pack(side=tkinter.RIGHT, fill=tkinter.Y)
+        vbar.config(command=grid_canvas.yview)
+
+        # bind vertical scroll bar to mouse wheel
+        grid.bind_all("<MouseWheel>", lambda event: grid_canvas.yview_scroll(int(-1*(event.delta/120)), "units"))
+
+        # create a frame to contain the grids
+        row_frame = tkinter.Frame(row_canvas)
+        row_window = row_canvas.create_window((0,0), window=row_frame, anchor='nw')
+        col_frame = tkinter.Frame(col_canvas)
+        col_window = col_canvas.create_window((0,0), window=col_frame, anchor='nw')
+        grid_frame = tkinter.Frame(grid_canvas)
+        grid_window = grid_canvas.create_window((0,0), window=grid_frame, anchor='nw')
+
+        # create entry boxes for the row and column names
+        row_names = []
+        col_names = []
+        for i in range(len(self.data[key].index)):
+            row_names.append(tkinter.Entry(row_frame, width=10))
+            row_names[i].grid(row=i, column=0)
+            row_names[i].insert(0, self.data[key].index[i])
+        for i in range(len(self.data[key].columns)):
+            col_names.append(tkinter.Entry(col_frame, width=10))
+            col_names[i].grid(row=0, column=i)
+            col_names[i].insert(0, self.data[key].columns[i])
+        
+        # create entry boxes for the data
+        data = []
+        for i in range(len(self.data[key].index)):
+            data.append([])
+            for j in range(len(self.data[key].columns)):
+                data[i].append(tkinter.Entry(grid_frame, width=10))
+                data[i][j].grid(row=i, column=j)
+                data[i][j].insert(0, self.data[key].iloc[i, j])
+        
+        # bind the scroll bars to the canvas
+        row_canvas.config(xscrollcommand=hbar.set)
+        col_canvas.config(yscrollcommand=vbar.set)
+        grid_canvas.config(xscrollcommand=hbar.set, yscrollcommand=vbar.set)
+
+        # bind the entry boxes to the scroll bars
+        def xview(*args):
+            row_canvas.xview(*args)
+            grid_canvas.xview(*args)
+        def yview(*args):
+            col_canvas.yview(*args)
+            grid_canvas.yview(*args)
+        row_canvas.xview_moveto(0)
+        col_canvas.yview_moveto(0)
+        grid_canvas.xview_moveto(0)
+        grid_canvas.yview_moveto(0)
+        row_canvas.config(xscrollcommand=xview)
+        col_canvas.config(yscrollcommand=yview)
+        grid_canvas.config(xscrollcommand=xview, yscrollcommand=yview)
+
+        # update the scroll region to encompass the inner frame
+        def update_scroll_region(event):
+            row_canvas.config(scrollregion=row_canvas.bbox(tkinter.ALL))
+            col_canvas.config(scrollregion=col_canvas.bbox(tkinter.ALL))
+            grid_canvas.config(scrollregion=grid_canvas.bbox(tkinter.ALL))
+        row_frame.bind('<Configure>', update_scroll_region)
+        col_frame.bind('<Configure>', update_scroll_region)
+        grid_frame.bind('<Configure>', update_scroll_region)
+
+
+
     def create_grid(self, key=None):
         #  display the data in a excel like grid in a new TopLevel window
         grid = tkinter.Toplevel(self.master, takefocus=True, padx=10, pady=10)
@@ -244,7 +332,7 @@ class HPLC:
     def display(self):
         # create a grid for each data frame marked in checkboxes
         for key in self.check():
-            self.create_grid(key)
+            self.create_grid_new(key)
 
         # get grids with the title of the data frame and destroy them
         for grid in self.master.winfo_children():
