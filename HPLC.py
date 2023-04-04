@@ -65,7 +65,7 @@ class HPLC:
 
     def on_closing(self):
         for key in self.data.keys():
-            self.data[key].to_csv(Path('data').joinpath(key + '.csv'))
+            self.data[key].to_csv(Path('data').joinpath(key + '.csv'), index=self.data[key].index.names)
         self.master.destroy()
 
     def check(self, key = None):
@@ -173,29 +173,42 @@ class HPLC:
         grid = tkinter.Toplevel(self.master, takefocus=True, padx=10, pady=10)
         grid.title(key)
 
+        line_height = tkinter.font.nametofont("TkDefaultFont").metrics("linespace") + 2
+
         row_canvas = tkinter.Canvas(grid, borderwidth=0, highlightthickness=0)
-        row_canvas.pack(side=tkinter.TOP, fill=tkinter.X)
+        row_canvas.grid(row=0, column=1, sticky=tkinter.N+tkinter.S+tkinter.E+tkinter.W)
         row_canvas.config(scrollregion=row_canvas.bbox(tkinter.ALL))
         
         col_canvas = tkinter.Canvas(grid, borderwidth=0, highlightthickness=0)
-        col_canvas.pack(side=tkinter.LEFT, fill=tkinter.Y)
+        col_canvas.grid(row=1, column=0, sticky=tkinter.N+tkinter.S+tkinter.E+tkinter.W)
         col_canvas.config(scrollregion=col_canvas.bbox(tkinter.ALL))
 
         grid_canvas = tkinter.Canvas(grid, borderwidth=0, highlightthickness=0)
-        grid_canvas.pack(side=tkinter.LEFT, fill=tkinter.BOTH, expand=True)
+        grid_canvas.grid(row=1, column=1, sticky=tkinter.N+tkinter.S+tkinter.E+tkinter.W)
         grid_canvas.config(scrollregion=grid_canvas.bbox(tkinter.ALL))
 
         # create scroll bars
         hbar = tkinter.Scrollbar(grid, orient=tkinter.HORIZONTAL)
-        hbar.pack(side=tkinter.BOTTOM, fill=tkinter.X)
+        hbar.grid(row=2, column=1, sticky=tkinter.E+tkinter.W)
         hbar.config(command=grid_canvas.xview)
         vbar = tkinter.Scrollbar(grid, orient=tkinter.VERTICAL)
-        vbar.pack(side=tkinter.RIGHT, fill=tkinter.Y)
+        vbar.grid(row=1, column=2, sticky=tkinter.N+tkinter.S)
         vbar.config(command=grid_canvas.yview)
 
-        # bind vertical scroll bar to mouse wheel
-        grid.bind_all("<MouseWheel>", lambda event: grid_canvas.yview_scroll(int(-1*(event.delta/120)), "units"))
+        # note: horizontal scroll needs ajust y scroll and vice versa
 
+        def h_scroll(event):
+            col_canvas.yview_scroll(-1*(event.delta//120), 'units')
+            grid_canvas.yview_scroll(-1*(event.delta//120), 'units')
+
+        def v_scroll(event):
+            row_canvas.xview_scroll(-1*(event.delta//120), 'units')
+            grid_canvas.xview_scroll(-1*(event.delta//120), 'units')
+        
+        # bind mouse wheel to scroll bars
+        grid.bind('<MouseWheel>', h_scroll)
+        grid.bind('<Shift-MouseWheel>', v_scroll)
+        
         # create a frame to contain the grids
         row_frame = tkinter.Frame(row_canvas)
         row_window = row_canvas.create_window((0,0), window=row_frame, anchor='nw')
@@ -204,56 +217,36 @@ class HPLC:
         grid_frame = tkinter.Frame(grid_canvas)
         grid_window = grid_canvas.create_window((0,0), window=grid_frame, anchor='nw')
 
-        # create entry boxes for the row and column names
-        row_names = []
-        col_names = []
-        for i in range(len(self.data[key].index)):
-            row_names.append(tkinter.Entry(row_frame, width=10))
-            row_names[i].grid(row=i, column=0)
-            row_names[i].insert(0, self.data[key].index[i])
+        # create entry widgets for the row and column headers 
         for i in range(len(self.data[key].columns)):
-            col_names.append(tkinter.Entry(col_frame, width=10))
-            col_names[i].grid(row=0, column=i)
-            col_names[i].insert(0, self.data[key].columns[i])
-        
-        # create entry boxes for the data
-        data = []
+            entry = tkinter.StringVar(value=self.data[key].columns[i])
+            tkinter.Entry(row_frame, textvariable=entry, width=10, background='black', foreground="white", justify='center').grid(row=0, column=i+1)
+       
+        # Create a Tkinter Label for each index value in the multiindex and align under the respective column header
+        if len(self.data[key].index.names) > 1:
+            for row, index in enumerate(self.data[key].index):
+                for col, name in enumerate(self.data[key].index.names):
+                    entry = tkinter.StringVar(value=self.data[key].index[row][col])
+                    tkinter.Entry(col_frame, textvariable=entry, width=10, background='black', foreground="white", justify='center').grid(row=row+1, column=col)
+        else:
+            for row, index in enumerate(self.data[key].index):
+                entry = tkinter.StringVar(value=self.data[key].index[row])
+                tkinter.Entry(col_frame, textvariable=entry, width=10, background='black', foreground="white", justify='center').grid(row=row+1, column=0)
+
+        # create entry widgets for the data
         for i in range(len(self.data[key].index)):
-            data.append([])
             for j in range(len(self.data[key].columns)):
-                data[i].append(tkinter.Entry(grid_frame, width=10))
-                data[i][j].grid(row=i, column=j)
-                data[i][j].insert(0, self.data[key].iloc[i, j])
-        
-        # bind the scroll bars to the canvas
+                entry = tkinter.StringVar(value=self.data[key].iloc[i,j])
+                tkinter.Entry(grid_frame, textvariable=entry, width=10, justify='center').grid(row=i+1, column=j+1)
+
+        row_canvas.update_idletasks()
+        col_canvas.update_idletasks()
+        grid_canvas.update_idletasks()
+
+        # bind the scroll bars to the canvases
         row_canvas.config(xscrollcommand=hbar.set)
         col_canvas.config(yscrollcommand=vbar.set)
         grid_canvas.config(xscrollcommand=hbar.set, yscrollcommand=vbar.set)
-
-        # bind the entry boxes to the scroll bars
-        def xview(*args):
-            row_canvas.xview(*args)
-            grid_canvas.xview(*args)
-        def yview(*args):
-            col_canvas.yview(*args)
-            grid_canvas.yview(*args)
-        row_canvas.xview_moveto(0)
-        col_canvas.yview_moveto(0)
-        grid_canvas.xview_moveto(0)
-        grid_canvas.yview_moveto(0)
-        row_canvas.config(xscrollcommand=xview)
-        col_canvas.config(yscrollcommand=yview)
-        grid_canvas.config(xscrollcommand=xview, yscrollcommand=yview)
-
-        # update the scroll region to encompass the inner frame
-        def update_scroll_region(event):
-            row_canvas.config(scrollregion=row_canvas.bbox(tkinter.ALL))
-            col_canvas.config(scrollregion=col_canvas.bbox(tkinter.ALL))
-            grid_canvas.config(scrollregion=grid_canvas.bbox(tkinter.ALL))
-        row_frame.bind('<Configure>', update_scroll_region)
-        col_frame.bind('<Configure>', update_scroll_region)
-        grid_frame.bind('<Configure>', update_scroll_region)
-
 
 
     def create_grid(self, key=None):
