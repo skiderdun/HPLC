@@ -168,17 +168,15 @@ class HPLC:
             else:
                 self.data[key].to_csv(str(self.path.stem) + '_' + str(key) + '.csv')                        
 
-    def create_grid_new(self, key=None):
+    def create_grid(self, key=None):
         #  display the data in a excel like grid in a new TopLevel window
-        grid = tkinter.Toplevel(self.master, takefocus=True, padx=10, pady=10)
+        grid = tkinter.Toplevel(self.master, takefocus=True, padx=0, pady=0)
         grid.title(key)
-
-        line_height = tkinter.font.nametofont("TkDefaultFont").metrics("linespace") + 2
 
         row_canvas = tkinter.Canvas(grid, borderwidth=0, highlightthickness=0)
         row_canvas.grid(row=0, column=1, sticky=tkinter.N+tkinter.S+tkinter.E+tkinter.W)
         row_canvas.config(scrollregion=row_canvas.bbox(tkinter.ALL))
-        
+
         col_canvas = tkinter.Canvas(grid, borderwidth=0, highlightthickness=0)
         col_canvas.grid(row=1, column=0, sticky=tkinter.N+tkinter.S+tkinter.E+tkinter.W)
         col_canvas.config(scrollregion=col_canvas.bbox(tkinter.ALL))
@@ -201,13 +199,25 @@ class HPLC:
             col_canvas.yview_scroll(-1*(event.delta//120), 'units')
             grid_canvas.yview_scroll(-1*(event.delta//120), 'units')
 
+        def h_scroll_page(event):
+            col_canvas.yview_scroll(-1, 'pages')
+            grid_canvas.yview_scroll(-1, 'pages')
+
         def v_scroll(event):
             row_canvas.xview_scroll(-1*(event.delta//120), 'units')
             grid_canvas.xview_scroll(-1*(event.delta//120), 'units')
         
+        def v_scroll_page(event):
+            row_canvas.xview_scroll(-1, 'pages')
+            grid_canvas.xview_scroll(-1, 'pages')
+        
         # bind mouse wheel to scroll bars
         grid.bind('<MouseWheel>', h_scroll)
         grid.bind('<Shift-MouseWheel>', v_scroll)
+
+        # bind page up and page down to scroll bars
+        grid.bind('<Prior>', h_scroll_page)
+        grid.bind('<Next>', h_scroll_page)
         
         # create a frame to contain the grids
         row_frame = tkinter.Frame(row_canvas)
@@ -248,84 +258,10 @@ class HPLC:
         col_canvas.config(yscrollcommand=vbar.set)
         grid_canvas.config(xscrollcommand=hbar.set, yscrollcommand=vbar.set)
 
-
-    def create_grid(self, key=None):
-        #  display the data in a excel like grid in a new TopLevel window
-        grid = tkinter.Toplevel(self.master, takefocus=True, padx=10, pady=10)
-        grid.title(key)
-
-        # Create a canvas to contain the grid frame and scrollbar
-        canvas = tkinter.Canvas(grid, borderwidth=0, highlightthickness=0)
-        
-        # create scroll bars
-        hbar = tkinter.Scrollbar(grid, orient=tkinter.HORIZONTAL)
-        hbar.pack(side=tkinter.BOTTOM, fill=tkinter.X)
-        hbar.config(command=canvas.xview)
-        vbar = tkinter.Scrollbar(grid, orient=tkinter.VERTICAL)
-        vbar.pack(side=tkinter.RIGHT, fill=tkinter.Y)
-        vbar.config(command=canvas.yview)
-
-        # bind vertical scroll bar to mouse wheel
-        grid.bind_all("<MouseWheel>", lambda event: canvas.yview_scroll(int(-1*(event.delta/120)), "units"))
-
-        # bind horizontal scroll bar to shift mouse wheel
-        grid.bind_all("<Shift-MouseWheel>", lambda event: canvas.xview_scroll(int(-1*(event.delta/120)), "units"))
-
-        # bind vertical scroll bar to page up and page down keys
-        grid.bind_all("<Prior>", lambda event: canvas.yview_scroll(-1, "pages"))
-        grid.bind_all("<Next>", lambda event: canvas.yview_scroll(1, "pages"))
-
-        # bind horizontal scroll bar to shift page up and shift page down keys
-        grid.bind_all("<Shift-Prior>", lambda event: canvas.xview_scroll(-1, "pages"))
-        grid.bind_all("<Shift-Next>", lambda event: canvas.xview_scroll(1, "pages"))
-
-        # Create a frame to hold the grid entries
-        canvas.pack(side=tkinter.LEFT, fill=tkinter.BOTH, expand=True)
-        grid_frame = tkinter.Frame(canvas)
-        canvas.create_window((0, 0), window=grid_frame, anchor=tkinter.NW)
-
-        # Create labels for the index columns
-        for col, name in enumerate(self.data[key].index.names):
-            label = tkinter.Label(grid_frame, text=name, font=('Arial', 12, 'bold'))
-            label.grid(row=0, column=col)
-        
-        # Create a Tkinter Label for each index value in the multiindex and align under the respective column header
-        if len(self.data[key].index.names) > 1:
-            for row, index in enumerate(self.data[key].index):
-                for col, name in enumerate(self.data[key].index.names):
-                    entry = tkinter.Label(grid_frame, text=index[col], font=('Arial', 12))
-                    entry.grid(row=row+1, column=col)
-        else:
-            for row, index in enumerate(self.data[key].index):
-                entry = tkinter.Label(grid_frame, text=index, font=('Arial', 12))
-                entry.grid(row=row+1, column=0)
-
-        # Create a Tkinter Label for the column headers
-        for col, header in enumerate(self.data[key].columns):
-            label = tkinter.Label(grid_frame, text=header, font=('Arial', 12, 'bold'))
-            label.grid(row=0, column=col+len(self.data[key].index.names))
-                
-        # Create a Tkinter Entry widget for each cell in the grid
-        self.entries = {}
-        for row, index in enumerate(self.data[key].index):
-            for col, column in enumerate(self.data[key].columns):
-                entry_var = tkinter.StringVar(value=self.data[key].at[index, column])
-                entry = tkinter.Entry(grid_frame, textvariable=entry_var, font=('Arial', 12))
-                entry.grid(row=row+1, column=col+len(self.data[key].index.names))
-                self.entries[(row, col)] = entry_var
-
-        # Update the canvas scroll region after the grid frame is created
-        grid_frame.update_idletasks()
-
-        # configure the canvas
-        canvas.config(yscrollcommand=vbar.set)
-        canvas.config(xscrollcommand=hbar.set)
-        canvas.config(scrollregion=canvas.bbox("all"))
-
     def display(self):
         # create a grid for each data frame marked in checkboxes
         for key in self.check():
-            self.create_grid_new(key)
+            self.create_grid(key)
 
         # get grids with the title of the data frame and destroy them
         for grid in self.master.winfo_children():
