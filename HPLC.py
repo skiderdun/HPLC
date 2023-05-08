@@ -154,7 +154,7 @@ class HPLC:
     def save_as(self):
         self.path = Path(tkinter.filedialog.asksaveasfilename(initialdir=self.path.parent,
                                                 title='Save File',
-                                                filetypes=(('Excel Files', '*.xlsx'), ('OpenDocument', '*.ods'), ('All Files', '*.*'))))
+                                                filetypes=(('Excel Files', '*.xlsx'), ('OpenDocument', '*.ods'), ('Comma Seperated(UTF8)', '*.csv'), ('All Files', '*.*'))))
         # if no file extension is given, add .xlsx
         if self.path.suffix == '':
             self.path = self.path.with_suffix('.xlsx')
@@ -170,21 +170,11 @@ class HPLC:
 
     def create_grid(self, key=None):
         #  display the data in a excel like grid in a new TopLevel window
-        grid = tkinter.Toplevel(self.master, takefocus=True, padx=0, pady=0)
+        grid = tkinter.Toplevel(self.master, takefocus=True)
         grid.title(key)
 
-        row_canvas = tkinter.Canvas(grid, borderwidth=0, highlightthickness=0)
-        row_canvas.grid(row=0, column=1, sticky=tkinter.N+tkinter.S+tkinter.E+tkinter.W)
-        row_canvas.config(scrollregion=row_canvas.bbox(tkinter.ALL))
-
-        col_canvas = tkinter.Canvas(grid, borderwidth=0, highlightthickness=0)
-        col_canvas.grid(row=1, column=0, sticky=tkinter.N+tkinter.S+tkinter.E+tkinter.W)
-        col_canvas.config(scrollregion=col_canvas.bbox(tkinter.ALL))
-
-        grid_canvas = tkinter.Canvas(grid, borderwidth=0, highlightthickness=0)
-        grid_canvas.grid(row=1, column=1, sticky=tkinter.N+tkinter.S+tkinter.E+tkinter.W)
-        grid_canvas.config(scrollregion=grid_canvas.bbox(tkinter.ALL))
-
+         
+        
         # create scroll bars
         hbar = tkinter.Scrollbar(grid, orient=tkinter.HORIZONTAL)
         hbar.grid(row=2, column=1, sticky=tkinter.E+tkinter.W)
